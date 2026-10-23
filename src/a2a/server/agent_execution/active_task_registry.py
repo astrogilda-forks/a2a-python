@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from a2a.server.agent_execution.agent_executor import AgentExecutor
     from a2a.server.cluster.event_stream import TaskEventStream
+    from a2a.server.cluster.lease import TaskLeaseStore
     from a2a.server.cluster.task_store import VersionedTaskStore
     from a2a.server.context import ServerCallContext
     from a2a.server.tasks.push_notification_sender import PushNotificationSender
@@ -17,6 +18,10 @@ if TYPE_CHECKING:
     from a2a.types.a2a_pb2 import Message
 
 from a2a.server.agent_execution.active_task import ActiveTask
+from a2a.server.cluster.lease import (
+    DEFAULT_HEARTBEAT_INTERVAL,
+    DEFAULT_LEASE_TTL,
+)
 from a2a.server.cluster.task_store import StoredTask
 from a2a.server.tasks.task_manager import TaskManager
 from a2a.utils.errors import TaskNotFoundError
@@ -28,17 +33,23 @@ logger = logging.getLogger(__name__)
 class ActiveTaskRegistry:
     """A registry for active ActiveTask instances."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         agent_executor: AgentExecutor,
         task_store: TaskStore | VersionedTaskStore,
         push_sender: PushNotificationSender | None = None,
         event_stream: TaskEventStream | None = None,
+        lease_store: TaskLeaseStore | None = None,
+        lease_ttl: float = DEFAULT_LEASE_TTL,
+        heartbeat_interval: float = DEFAULT_HEARTBEAT_INTERVAL,
     ):
         self._agent_executor = agent_executor
         self._task_store = task_store
         self._push_sender = push_sender
         self._event_stream = event_stream
+        self._lease_store = lease_store
+        self._lease_ttl = lease_ttl
+        self._heartbeat_interval = heartbeat_interval
         self._active_tasks: dict[str, ActiveTask] = {}
         self._lock = threading.RLock()
         self._cleanup_tasks: set[asyncio.Task[None]] = set()
@@ -73,6 +84,9 @@ class ActiveTaskRegistry:
                     push_sender=self._push_sender,
                     on_cleanup=self._on_active_task_cleanup,
                     event_stream=self._event_stream,
+                    lease_store=self._lease_store,
+                    lease_ttl=self._lease_ttl,
+                    heartbeat_interval=self._heartbeat_interval,
                 )
                 self._active_tasks[task_id] = active_task
 
@@ -119,6 +133,11 @@ class ActiveTaskRegistry:
         with self._lock:
             self._active_tasks.pop(task_id, None)
             logger.debug('Removed active task for %s from registry', task_id)
+
+    def snapshot(self) -> list[ActiveTask]:
+        """The currently registered tasks."""
+        with self._lock:
+            return list(self._active_tasks.values())
 
     async def get(self, task_id: str) -> ActiveTask | None:
         """Retrieves an existing task."""
