@@ -118,6 +118,10 @@ dev = [
   # against an independent implementation, so a mistake shared between the
   # implementation and its tests still shows up. Not a runtime dependency.
   "rfc8785>=0.1.4",
+  # Test-only source of the a2a-jcs-v01 conformance corpus (from a2a-tck),
+  # which tests/utils/test_jcs.py reads instead of a vendored copy. Needs
+  # Python 3.11+; those tests skip on 3.10.
+  "agent-evidence-vectors==0.28.0; python_version >= '3.11'",
   "ruff>=0.12.8",
   "uv-dynamic-versioning>=0.8.2",
   "types-protobuf",

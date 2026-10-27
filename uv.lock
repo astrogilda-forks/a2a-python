@@ -86,6 +86,7 @@ telemetry = [
 [package.dev-dependencies]
 dev = [
     { name = "a2a-sdk", extra = ["all"] },
+    { name = "agent-evidence-vectors", marker = "python_full_version >= '3.11'" },
     { name = "fastapi" },
     { name = "pre-commit" },
     { name = "pyjwt" },
@@ -155,6 +156,7 @@ provides-extras = ["all", "db-cli", "encryption", "fastapi", "grpc", "http-serve
 [package.metadata.requires-dev]
 dev = [
     { name = "a2a-sdk", extras = ["all"], editable = "." },
+    { name = "agent-evidence-vectors", marker = "python_full_version >= '3.11'", specifier = "==0.28.0" },
     { name = "fastapi", specifier = ">=0.115.2" },
     { name = "pre-commit" },
     { name = "pyjwt", specifier = ">=2.0.0" },
@@ -173,6 +175,15 @@ dev = [
     { name = "types-requests" },
     { name = "uv-dynamic-versioning", specifier = ">=0.8.2" },
     { name = "uvicorn", specifier = ">=0.35.0" },
+]
+
+[[package]]
+name = "agent-evidence-vectors"
+version = "0.28.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5b/95/e9508df79d3d019b95f482c8c711d9e32afa42dfe64a369b78974ddffbc7/agent_evidence_vectors-0.28.0.tar.gz", hash = "sha256:8f524cdf53fbe1c4a38687ddd2a4e36012cb8f9a80c49f3454eb1d9b7fcdc722", size = 3569639, upload-time = "2026-10-27T14:06:54.125Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bf/e2/be88ed25c01ec37351aa3b6f188c184302621ccb27c3e3d43f34187d96a5/agent_evidence_vectors-0.28.0-py3-none-any.whl", hash = "sha256:e87a2d64e3ba0953c23f6556f8665be4149c37f61e6f7095a9949580cbab0b4f", size = 10460798, upload-time = "2026-10-27T14:06:51.254Z" },
 ]
 
 [[package]]

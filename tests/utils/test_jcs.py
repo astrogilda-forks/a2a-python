@@ -1,9 +1,10 @@
 """RFC 8785 (JCS) conformance tests for Agent Card canonicalization.
 
-The vector corpus in `jcs_vectors.json` is language-neutral and was produced by
-two independent RFC 8785 implementations written by neither SDK author, so
-these tests check conformance against the RFC rather than against this SDK's
-own output.
+The vector corpus is the language-neutral `a2a-jcs-v01` corpus from
+a2aproject/a2a-tck, read from the pinned `agent-evidence-vectors` package. Its
+expected values were produced by two independent RFC 8785 implementations
+written by neither SDK author, so these tests check conformance against the
+RFC rather than against this SDK's own output.
 """
 
 import base64
@@ -20,6 +21,12 @@ import jwt
 import pytest
 import rfc8785
 
+
+try:
+    from agent_evidence_vectors import a2ajcs
+except ImportError:  # agent-evidence-vectors requires Python 3.11 or newer
+    a2ajcs = None
+
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
@@ -32,11 +39,13 @@ from a2a.utils._jcs import MAX_DEPTH, CanonicalizationError, canonicalize
 from google.protobuf import struct_pb2
 
 
-_VECTORS = json.loads(
-    (Path(__file__).parent / 'jcs_vectors.json').read_text(encoding='utf-8')
+_SIGNATURES_GROUP = 'a2a-spec-8.4.1-rule-3'
+_VECTORS = list(a2ajcs.vectors('card-signing-input')) if a2ajcs else []
+needs_corpus = pytest.mark.skipif(
+    a2ajcs is None, reason='agent-evidence-vectors requires Python 3.11+'
 )
-_ACCEPT = [v for v in _VECTORS['vectors'] if v['disposition'] == 'MUST-ACCEPT']
-_REJECT = [v for v in _VECTORS['vectors'] if v['disposition'] == 'MUST-REJECT']
+_ACCEPT = [v for v in _VECTORS if v.disposition == 'MUST-ACCEPT']
+_REJECT = [v for v in _VECTORS if v.disposition == 'MUST-REJECT']
 
 
 def _agent_card(
@@ -74,18 +83,20 @@ def _agent_card(
     )
 
 
+@needs_corpus
 def test_vector_corpus_is_complete():
     """The corpus must be whole; a partially loaded corpus passes vacuously."""
-    assert len(_ACCEPT) == _VECTORS['counts']['accept'] == 47
-    assert len(_REJECT) == _VECTORS['counts']['reject'] == 10
-    assert len(_VECTORS['vectors']) == _VECTORS['counts']['total'] == 57
+    assert len(_ACCEPT) == 47
+    assert len(_REJECT) == 10
+    assert len(_VECTORS) == 57
 
 
-@pytest.mark.parametrize('vector', _ACCEPT, ids=lambda v: v['id'])
+@pytest.mark.parametrize('vector', _ACCEPT, ids=lambda v: v.id)
+@needs_corpus
 def test_vector_must_accept(vector):
     """Canonical output must match the corpus byte for byte."""
-    value = vector['input']
-    if vector['group'] == 'a2-signatures-exclusion':
+    value = json.loads(vector.text)
+    if vector.clause == _SIGNATURES_GROUP:
         # Spec 8.4.1 rule 3: the signatures key is excluded unconditionally.
         # This mirrors the two steps _canonicalize_agent_card applies to the
         # card dict before serializing it.
@@ -94,13 +105,14 @@ def test_vector_must_accept(vector):
         value = signing._clean_empty(value)
 
     actual = canonicalize(value).encode('utf-8')
-    assert actual.hex() == vector['canonical_utf8_hex'], vector['rationale']
+    assert actual.hex() == vector.expected.hex(), vector.rationale
 
 
-@pytest.mark.parametrize('vector', _REJECT, ids=lambda v: v['id'])
+@pytest.mark.parametrize('vector', _REJECT, ids=lambda v: v.id)
+@needs_corpus
 def test_vector_must_reject(vector):
     """Values with no canonical form must be refused, not silently mangled."""
-    if vector['group'] == 'a2-signatures-exclusion':
+    if vector.clause == _SIGNATURES_GROUP:
         # These two vectors reject claimed-canonical output that still carries
         # a signatures key, which is a property of the producer rather than an
         # input it can be handed. The producer side is asserted directly.
@@ -113,12 +125,13 @@ def test_vector_must_reject(vector):
         )
         return
 
-    value = json.loads(vector['input_raw'])
+    value = json.loads(vector.text)
     with pytest.raises(CanonicalizationError):
         canonicalize(value)
 
 
-@pytest.mark.parametrize('vector', _ACCEPT, ids=lambda v: v['id'])
+@pytest.mark.parametrize('vector', _ACCEPT, ids=lambda v: v.id)
+@needs_corpus
 def test_vector_agrees_with_independent_implementation(vector):
     """An independent RFC 8785 implementation must produce the same bytes.
 
@@ -126,8 +139,8 @@ def test_vector_agrees_with_independent_implementation(vector):
     be transcribed wrongly, and the oracle could be wrong about a clause the
     corpus covers. Requiring both makes a single mistake visible.
     """
-    value = vector['input']
-    if vector['group'] == 'a2-signatures-exclusion':
+    value = json.loads(vector.text)
+    if vector.clause == _SIGNATURES_GROUP:
         value = dict(value)
         value.pop('signatures', None)
         value = signing._clean_empty(value)
